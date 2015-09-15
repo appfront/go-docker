@@ -63,7 +63,7 @@ type HostConfig struct {
 
 type LogConfig struct {
 	Type   string
-	Config []map[string]string
+	Config map[string]string
 }
 
 type ExecConfig struct {
