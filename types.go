@@ -58,6 +58,12 @@ type HostConfig struct {
 	CpuPeriod       int64
 	CpusetCpus      string
 	CpusetMems      string
+	LogConfig       LogConfig
+}
+
+type LogConfig struct {
+	Type   string
+	Config []map[string]string
 }
 
 type ExecConfig struct {
