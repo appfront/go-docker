@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const APIVersion = "v1.17"
+const APIVersion = "v1.20"
 
 type Client struct {
 	URL        *url.URL
