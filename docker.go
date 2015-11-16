@@ -83,7 +83,7 @@ func (client *Client) DoRequest(method string, path string, body io.Reader) (*ht
 		return nil, err
 	}
 
-	defer req.Close()
+	req.Close = true
 
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
