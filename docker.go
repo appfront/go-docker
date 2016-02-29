@@ -468,33 +468,6 @@ func (client *Client) Exec(config *ExecConfig) (string, error) {
 	return createExecResp.Id, nil
 }
 
-func (client *Client) ExecOpen(config *ExecConfig) (*io.ReadCloser, error) {
-	data, err := json.Marshal(config)
-	if err != nil {
-		return nil, err
-	}
-	uri := fmt.Sprintf("/containers/%s/exec", config.Container)
-	resp, err := client.DoRequest("POST", uri, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	var createExecResp struct {
-		Id string
-	}
-	if err = jsonUnmarshal(resp, &createExecResp); err != nil {
-		return nil, err
-	}
-	uri = fmt.Sprintf("/exec/%s/start", createExecResp.Id)
-	resp, err = client.DoRequest("POST", uri, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	return &resp.Body, nil
-
-	//resp.Body.Close()
-	//return createExecResp.Id, nil
-}
-
 func (client *Client) InspectImage(name string) (ImageInfo, error) {
 	uri := fmt.Sprintf("/images/%s/json", name)
 	resp, err := client.DoRequest("GET", uri, nil)
