@@ -84,13 +84,14 @@ func (client *Client) DoRequest(method string, path string, body io.Reader) (*ht
 	}
 
 	req.Close = true
-
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		if !strings.Contains(err.Error(), "connection refused") && client.TLSConfig == nil {
+			resp.Body.Close()
 			return nil, fmt.Errorf("%v. Are you trying to connect to a TLS-enabled daemon without TLS?", err)
 		}
+		resp.Body.Close()
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
@@ -113,7 +114,9 @@ func (client *Client) NewRequest(method string, path string, body io.Reader) (*h
 // For convenience it also closes the response body.
 func jsonUnmarshal(resp *http.Response, v interface{}) error {
 	data, err := ioutil.ReadAll(resp.Body)
+	resp.Request.Close = true
 	resp.Body.Close()
+
 	if err != nil {
 		return fmt.Errorf("failed to read body from response: %v", err)
 	}
@@ -152,6 +155,8 @@ func (client *Client) Push(name, tag string, auth *AuthConfig) error {
 	req.Header.Add("X-Registry-Auth", authHeader)
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
 	defer resp.Body.Close()
@@ -260,11 +265,15 @@ func (client *Client) ContainerLogs(id string, options *LogOptions) (io.ReadClos
 	uri := fmt.Sprintf("/%s/containers/%s/logs?%s", APIVersion, id, v.Encode())
 	req, err := http.NewRequest("GET", client.URL.String()+uri, nil)
 	if err != nil {
+		req.Close = true
+		req.Body.Close()
 		return nil, err
 	}
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return nil, err
 	}
 	return resp.Body, nil
@@ -278,8 +287,11 @@ func (client *Client) StartContainer(id string, config *HostConfig) error {
 	uri := fmt.Sprintf("/%s/containers/%s/start", APIVersion, id)
 	resp, err := client.DoRequest("POST", uri, bytes.NewReader(data))
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
+	resp.Close = true
 	resp.Body.Close()
 	return nil
 }
@@ -288,8 +300,11 @@ func (client *Client) StopContainer(id string, timeout int) error {
 	uri := fmt.Sprintf("/%s/containers/%s/stop?t=%d", APIVersion, id, timeout)
 	resp, err := client.DoRequest("POST", uri, nil)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
+	resp.Close = true
 	resp.Body.Close()
 	return nil
 }
@@ -298,8 +313,11 @@ func (client *Client) RestartContainer(id string, timeout int) error {
 	uri := fmt.Sprintf("/%s/containers/%s/restart?t=%d", APIVersion, id, timeout)
 	resp, err := client.DoRequest("POST", uri, nil)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
+	resp.Close = true
 	resp.Body.Close()
 	return nil
 }
@@ -308,8 +326,11 @@ func (client *Client) KillContainer(id, signal string) error {
 	uri := fmt.Sprintf("/%s/containers/%s/kill?signal=%s", APIVersion, id, signal)
 	resp, err := client.DoRequest("POST", uri, nil)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
+	resp.Close = true
 	resp.Body.Close()
 	return nil
 }
@@ -323,6 +344,8 @@ func (client *Client) Version() (*Version, error) {
 	version := &Version{}
 	err = jsonUnmarshal(data, version)
 	if err != nil {
+		data.Close = true
+		data.Body.Close()
 		return nil, err
 	}
 	return version, nil
@@ -338,8 +361,11 @@ func (client *Client) PullImage(name string, auth *AuthConfig) error {
 	}
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
+
 	defer resp.Body.Close()
 	var finalObj map[string]interface{}
 	for decoder := json.NewDecoder(resp.Body); err == nil; err = decoder.Decode(&finalObj) {
@@ -362,16 +388,24 @@ func (client *Client) LoadImage(reader io.Reader) error {
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
+			resp.Close = true
+			resp.Body.Close()
 			return err
 		}
 		return &Error{StatusCode: resp.StatusCode, Status: resp.Status, msg: string(data)}
 	}
+
+	resp.Close = true
+	resp.Body.Close()
+
 	return nil
 }
 
@@ -388,8 +422,11 @@ func (client *Client) RemoveContainer(id string, force, volumes bool) error {
 	uri := fmt.Sprintf("/%s/containers/%s?%s", APIVersion, id, args)
 	resp, err := client.DoRequest("DELETE", uri, nil)
 	if err == nil {
+		resp.Close = true
 		resp.Body.Close()
 	}
+	resp.Close = true
+	resp.Body.Close()
 	return err
 }
 
@@ -404,12 +441,16 @@ func (client *Client) ListImages(all bool) ([]*Image, error) {
 	}
 	data, err := client.DoRequest("GET", uri, nil)
 	if err != nil {
+		data.Close = true
+		data.Body.Close()
 		return nil, err
 	}
 	var images []*Image
 	if err := jsonUnmarshal(data, &images); err != nil {
 		return nil, err
 	}
+	data.Body.Close()
+	data.Close = true
 	return images, nil
 }
 
@@ -468,37 +509,12 @@ func (client *Client) Exec(config *ExecConfig) (string, error) {
 	return createExecResp.Id, nil
 }
 
-func (client *Client) ExecOpen(config *ExecConfig) (*io.ReadCloser, error) {
-	data, err := json.Marshal(config)
-	if err != nil {
-		return nil, err
-	}
-	uri := fmt.Sprintf("/containers/%s/exec", config.Container)
-	resp, err := client.DoRequest("POST", uri, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	var createExecResp struct {
-		Id string
-	}
-	if err = jsonUnmarshal(resp, &createExecResp); err != nil {
-		return nil, err
-	}
-	uri = fmt.Sprintf("/exec/%s/start", createExecResp.Id)
-	resp, err = client.DoRequest("POST", uri, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	return &resp.Body, nil
-
-	//resp.Body.Close()
-	//return createExecResp.Id, nil
-}
-
 func (client *Client) InspectImage(name string) (ImageInfo, error) {
 	uri := fmt.Sprintf("/images/%s/json", name)
 	resp, err := client.DoRequest("GET", uri, nil)
 	if err != nil {
+		resp.Close = true
+		resp.Body.Close()
 		return ImageInfo{}, err
 	}
 	img := ImageInfo{}
