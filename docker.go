@@ -77,6 +77,12 @@ func newHTTPClient(u *url.URL, tlsConfig *tls.Config, timeout time.Duration) *ht
 	return &http.Client{Transport: httpTransport}
 }
 
+func CloseConnection(resp *http.Response) {
+	time.Sleep(5 * time.Second)
+	resp.Close = true
+	resp.Body.Close()
+}
+
 func (client *Client) DoRequest(method string, path string, body io.Reader) (*http.Response, error) {
 	req, err := client.NewRequest(method, path, body)
 	if err != nil {
@@ -101,6 +107,7 @@ func (client *Client) DoRequest(method string, path string, body io.Reader) (*ht
 		}
 		return nil, &Error{StatusCode: resp.StatusCode, Status: resp.Status, msg: string(data)}
 	}
+	go CloseConnection(resp)
 	return resp, nil
 }
 
